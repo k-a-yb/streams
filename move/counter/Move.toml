@@ -1,10 +1,15 @@
 [package]
 name = "suistream"
-version = "0.1.0"
+version = "1.0.0"
+authors = ["SuiStream Team"]
 edition = "2024.beta"
+published-at = "0x0"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "framework/testnet" }
 
 [addresses]
 suistream = "0x0"
+std = "0x1"
+sui = "0x2"

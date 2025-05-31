@@ -1,16 +1,54 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Crown, Zap, Star } from 'lucide-react';
 import { useSubscription, SubscriptionTier } from '@/services/subscriptionService';
-import { useWalletContext } from '@/providers/WalletProvider';
+import { useWallet } from '@suiet/wallet-kit';
 import { toast } from 'sonner';
 
 const SubscriptionPlans = () => {
-  const { isConnected, address, balance } = useWalletContext();
-  const { subscribe, useSubscriptionStatus, tiers } = useSubscription();
-  const { data: subscription } = useSubscriptionStatus();
+  const { connected: isConnected, address } = useWallet();
+  const { subscribe, subscription, isLoading, tiers } = useSubscription();
   const [isSubscribing, setIsSubscribing] = useState<SubscriptionTier | null>(null);
+  const [balance, setBalance] = useState('0');
+  
+  // Get the wallet's balance
+  const fetchBalance = async () => {
+    if (!isConnected || !address) return '0';
+    
+    try {
+      const response = await fetch(`https://fullnode.testnet.sui.io:443`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'suix_getBalance',
+          params: [address],
+        }),
+      });
+      
+      const data = await response.json();
+      return data.result?.totalBalance || '0';
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+      return '0';
+    }
+  };
+  
+  // Fetch balance when wallet is connected or address changes
+  useEffect(() => {
+    const getAndSetBalance = async () => {
+      if (isConnected && address) {
+        const balance = await fetchBalance();
+        setBalance(balance);
+      }
+    };
+    
+    getAndSetBalance();
+  }, [isConnected, address]);
 
   const handleSubscribe = async (tier: SubscriptionTier) => {
     if (!isConnected || !address) {
@@ -30,8 +68,9 @@ const SubscriptionPlans = () => {
     }
 
     // Check balance
-    if (parseFloat(balance) < tierInfo.price) {
-      toast.error(`Insufficient balance. You need at least ${tierInfo.price} SUI`);
+    const balanceInMist = BigInt(balance);
+    if (balanceInMist < BigInt(tierInfo.price)) {
+      toast.error(`Insufficient balance. You need at least ${tierInfo.price / 1000000000} SUI`);
       return;
     }
 
@@ -107,7 +146,14 @@ const SubscriptionPlans = () => {
     }
   ];
 
-  // handleSubscribe function is already defined above for handling subscription logic
+  // Show loading state while checking subscription status
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-neon-pink"></div>
+      </div>
+    );
+  }
 
   return (
     <section className="py-20 px-4 relative">

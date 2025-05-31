@@ -1,28 +1,24 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useWallet } from '@suiet/wallet-kit';
-import { TransactionBlock as SuiTransactionBlock } from '@mysten/sui.js/transactions';
-import { SuiClient } from '@mysten/sui.js/client';
-import { getPackageId, getPlatformWallet, getFullNodeUrl } from '@/config/networks';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { createSubscriptionTx, createCancelSubscriptionTx, createRenewSubscriptionTx } from '@/lib/transactions';
 
-// Using SuiTransactionBlock directly for type and value
+// Helper function to get package ID
+const getSuistreamPackageId = (): string => {
+  return import.meta.env.VITE_NEXT_PUBLIC_SUISTREAM_PACKAGE_ID || '';
+};
 
-// Define the subscription data interface
-interface SubscriptionData {
-  isActive: boolean;
-  tier?: number;
-  expiresAt: number;
-  startDate: number;
-}
-
-// Initialize Sui client
-const client = new SuiClient({ url: getFullNodeUrl() });
+// Helper function to get platform wallet address
+const getPlatformWallet = (): string => {
+  return '0xdedef1d507c9be500c5702be259a1dea45ccbbd7ca58c86ab8e31d169cf07a2e';
+};
 
 // Subscription tiers with their respective prices in MIST (1 SUI = 1_000_000_000 MIST)
 export const SUBSCRIPTION_TIERS = {
   1: {
     id: 1,
     name: 'Basic',
-    price: 5_000_000_000, // 5 SUI
+    price: 1_000_000_000, // 1 SUI
     features: [
       'Access to basic content',
       'SD quality streaming',
@@ -32,7 +28,7 @@ export const SUBSCRIPTION_TIERS = {
   2: {
     id: 2,
     name: 'Premium',
-    price: 10_000_000_000, // 10 SUI
+    price: 5_000_000_000, // 5 SUI
     features: [
       'Access to all basic content',
       'HD quality streaming',
@@ -43,7 +39,7 @@ export const SUBSCRIPTION_TIERS = {
   3: {
     id: 3,
     name: 'Ultimate',
-    price: 15_000_000_000, // 15 SUI
+    price: 10_000_000_000, // 10 SUI
     features: [
       'Access to all content',
       '4K + HDR quality',
@@ -66,147 +62,215 @@ export interface Subscription {
   autoRenew: boolean;
 }
 
-// Subscription response type from the blockchain
-// This interface is kept for reference but not used directly
-// to avoid unused variable warnings
-// interface SubscriptionResponse {
-//   data: {
-//     id: string;
-//     tier: number;
-//     user_address: string;
-//     start_date: string;
-//     expiry_date: string;
-//     is_active: boolean;
-//     auto_renew: boolean;
-//   } | null;
-// }
-
 export const useSubscription = () => {
   const { address, signAndExecuteTransactionBlock } = useWallet();
   const queryClient = useQueryClient();
-  const packageId = getPackageId();
-  const platformWallet = getPlatformWallet();
 
-  // Get the current user's subscription
-  const getSubscription = async (userAddress: string): Promise<SubscriptionData | null> => {
-    if (!userAddress) return null;
-    
-    try {
-      const txb = new SuiTransactionBlock();
+  // Get subscription status
+  const { data: subscription, isLoading, refetch } = useQuery<Subscription | null>({
+    queryKey: ['subscription', address],
+    queryFn: async () => {
+      if (!address) return null;
       
-      // Use devInspectTransactionBlock to simulate the transaction
-      await client.devInspectTransactionBlock({
-        transactionBlock: await txb.build({
-          client,
-          onlyTransactionKind: true
-        }),
-        sender: userAddress,
-      });
+      try {
+        // Get the package ID
+        const packageId = getSuistreamPackageId();
+        if (!packageId) {
+          console.error('Package ID not configured');
+          return null;
+        }
 
-      // For now, return mock data since we're just simulating the transaction
-      // In a real implementation, you would parse the result from the blockchain
-      return {
-        isActive: true,
-        tier: 1,
-        startDate: Math.floor(Date.now() / 1000),
-        expiresAt: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60, // 30 days from now
-      };
-    } catch (error) {
-      console.error('Error fetching subscription:', error);
-      return null;
-    }
-  };
-
-  // React Query hook to fetch subscription status
-  const useSubscriptionStatus = () => {
-    return useQuery({
-      queryKey: ['subscription', address],
-      queryFn: () => address ? getSubscription(address) : null,
-      enabled: !!address,
-      refetchInterval: 60_000, // Refetch every minute
-    });
-  };
-
-  // Check if user can access content based on their subscription tier
-  const checkContentAccess = async (requiredTier: SubscriptionTier = 1) => {
-    if (!address) return false;
-    
-    try {
-      const subscription = await getSubscription(address);
-      if (!subscription?.isActive) return false;
-      
-      // Check if user's tier meets or exceeds required tier
-      return (subscription.tier || 0) >= requiredTier;
-    } catch (error) {
-      console.error('Error checking content access:', error);
-      return false;
-    }
-  };
+        // In a real app, you would query the blockchain for the user's subscription
+        // For now, we'll simulate a subscription
+        return {
+          id: 'simulated-subscription-id',
+          tier: 1 as const,
+          userAddress: address,
+          startDate: Math.floor(Date.now() / 1000) - 86400, // 1 day ago
+          expiresAt: Math.floor(Date.now() / 1000) + 2592000, // 30 days from now
+          isActive: true,
+          autoRenew: true
+        };
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+        return null;
+      }
+    },
+    enabled: !!address,
+    staleTime: 60000
+  });
 
   // Subscribe to a plan
   const subscribe = async (tier: SubscriptionTier) => {
-    if (!address) {
-      throw new Error('Wallet not connected');
+    if (!address) throw new Error('Wallet not connected');
+    if (!signAndExecuteTransactionBlock) throw new Error('Wallet not connected');
+    
+    const txb = new TransactionBlock();
+    const tierInfo = SUBSCRIPTION_TIERS[tier];
+    
+    if (!tierInfo) {
+      throw new Error('Invalid subscription tier');
     }
-
+    
     try {
-      const txb = new SuiTransactionBlock();
-      const tierInfo = SUBSCRIPTION_TIERS[tier];
-      
-      if (!tierInfo) {
-        throw new Error('Invalid subscription tier');
-      }
-
-      // Transfer SUI to platform wallet
+      // Split the exact amount needed for the subscription
       const [coin] = txb.splitCoins(txb.gas, [txb.pure(tierInfo.price)]);
-      txb.transferObjects([coin], txb.pure(platformWallet));
-
-      // Call the subscribe function in the smart contract
-      txb.moveCall({
-        target: `${packageId}::suistream::subscribe`,
-        arguments: [
-          txb.pure(tier),
-        ],
-      });
-
-      // Execute the transaction using the wallet's signAndExecuteTransactionBlock
+      
+      // Create and execute the subscription transaction
+      createSubscriptionTx(txb, tier, coin);
+      
+      // Execute the transaction
       const result = await signAndExecuteTransactionBlock({
-        transactionBlock: txb,
+        // @ts-ignore - Type compatibility issue
+        transactionBlock: txb as any,
         options: {
           showEffects: true,
-          showEvents: true,
+          showObjectChanges: true,
         },
-      } as any); // Type assertion to handle the type mismatch
-
-      // Invalidate subscription query to refetch the latest data
+      });
+      
+      if (result.effects.status.status !== 'success') {
+        throw new Error('Transaction failed');
+      }
+      
+      // Invalidate and refetch
       await queryClient.invalidateQueries({ queryKey: ['subscription', address] });
       
+      // Refetch subscription data
+      await refetch();
+      
       return result;
-    } catch (error: any) {
-      console.error('Subscription failed:', error);
-      throw new Error(error.message || 'Failed to process subscription');
+    } catch (error) {
+      console.error('Error subscribing:', error);
+      throw error;
     }
+  };
+  
+  // Cancel an active subscription
+  const cancelSubscription = async (subscriptionId: string) => {
+    if (!address) throw new Error('Wallet not connected');
+    if (!signAndExecuteTransactionBlock) throw new Error('Wallet not connected');
+    
+    const txb = new TransactionBlock();
+    
+    try {
+      // Create and execute the cancel subscription transaction
+      createCancelSubscriptionTx(txb, subscriptionId);
+      
+      // Execute the transaction
+      const result = await signAndExecuteTransactionBlock({
+        // @ts-ignore - Type compatibility issue
+        transactionBlock: txb as any,
+        options: {
+          showEffects: true,
+          showObjectChanges: true,
+        },
+      });
+      
+      if (result.effects.status.status !== 'success') {
+        throw new Error('Transaction failed');
+      }
+      
+      // Invalidate and refetch
+      await queryClient.invalidateQueries({ queryKey: ['subscription', address] });
+      
+      // Refetch subscription data
+      await refetch();
+      
+      return result;
+    } catch (error) {
+      console.error('Error canceling subscription:', error);
+      throw error;
+    }
+  };
+  
+  // Renew an existing subscription
+  const renewSubscription = async (subscriptionId: string, tier: SubscriptionTier) => {
+    if (!address) throw new Error('Wallet not connected');
+    if (!signAndExecuteTransactionBlock) throw new Error('Wallet not connected');
+    
+    const txb = new TransactionBlock();
+    const tierInfo = SUBSCRIPTION_TIERS[tier];
+    
+    if (!tierInfo) {
+      throw new Error('Invalid subscription tier');
+    }
+    
+    try {
+      // Split the exact amount needed for the subscription
+      const [coin] = txb.splitCoins(txb.gas, [txb.pure(tierInfo.price)]);
+      
+      // Create and execute the renew subscription transaction
+      createRenewSubscriptionTx(txb, subscriptionId, coin, 1); // 1 month renewal
+      
+      // Execute the transaction
+      const result = await signAndExecuteTransactionBlock({
+        // @ts-ignore - Type compatibility issue
+        transactionBlock: txb as any,
+        options: {
+          showEffects: true,
+          showObjectChanges: true,
+        },
+      });
+      
+      if (result.effects.status.status !== 'success') {
+        throw new Error('Transaction failed');
+      }
+      
+      // Invalidate and refetch
+      await queryClient.invalidateQueries({ queryKey: ['subscription', address] });
+      
+      // Refetch subscription data
+      await refetch();
+      
+      return result;
+    } catch (error) {
+      console.error('Error renewing subscription:', error);
+      throw error;
+    }
+  };
+
+  // Get subscription status (simplified)
+  const useSubscriptionStatus = () => {
+    return useQuery({
+      queryKey: ['subscriptionStatus', address],
+      queryFn: async () => {
+        if (!subscription) return null;
+        
+        // In a real app, you would query the blockchain for the latest status
+        return {
+          isActive: subscription.isActive,
+          expiresAt: subscription.expiresAt,
+          daysRemaining: Math.ceil((subscription.expiresAt * 1000 - Date.now()) / (1000 * 60 * 60 * 24)),
+        };
+      },
+      enabled: !!subscription && !!address,
+      refetchInterval: 60000, // Check every minute
+    });
   };
 
   return {
     subscribe,
+    cancelSubscription,
+    renewSubscription,
     useSubscriptionStatus,
-    checkContentAccess,
-    getSubscription,
+    subscription: subscription || null,
+    isLoading,
+    refetch,
     tiers: SUBSCRIPTION_TIERS
   };
 };
 
-/**
- * Hook to check if user has access to content based on their subscription tier
- */
+// Hook to check if user has access to content based on their subscription tier
 export const useContentAccess = (requiredTier: SubscriptionTier = 1) => {
-  const { data: subscription, isLoading } = useSubscription().useSubscriptionStatus();
+  const { subscription } = useSubscription();
   
-  return {
-    hasAccess: subscription?.isActive && (subscription.tier || 0) >= requiredTier,
-    isLoading,
-    subscriptionTier: subscription?.tier,
-    isSubscribed: subscription?.isActive || false,
-  };
+  if (!subscription) {
+    return { hasAccess: false, isLoading: true };
+  }
+  
+  // User has access if their subscription tier is equal to or higher than required
+  const hasAccess = subscription.tier >= requiredTier;
+  
+  return { hasAccess, isLoading: false };
 };

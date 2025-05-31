@@ -9,7 +9,7 @@ const Footer = () => {
             <div className="flex items-center space-x-2">
               <Play className="w-8 h-8 text-neon-pink" />
               <h3 className="text-2xl font-orbitron font-bold text-white">
-               SUI<span className="text-neon-pink">STREAM</span>
+                CINEMA<span className="text-neon-pink">STREAM</span>
               </h3>
             </div>
             <p className="text-white/70">
@@ -50,7 +50,7 @@ const Footer = () => {
 
         <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between">
           <div className="text-white/60 text-sm mb-4 md:mb-0">
-            © 2024 SuiStream. Powered by Sui Network. All rights reserved.
+            © 2024 CinemaStream. Powered by Sui Network. All rights reserved.
           </div>
           <div className="flex items-center space-x-6">
             <div className="flex items-center space-x-2 text-neon-cyan">
