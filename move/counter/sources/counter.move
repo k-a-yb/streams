@@ -120,10 +120,10 @@ module suistream::suistream {
             expires_at: (tx_context::epoch_timestamp_ms(ctx) + SUBSCRIPTION_DURATION_MS) as u64,
         };
         
-        // Transfer payment
+        // Transfer payment to the platform wallet
         let payment_amount = coin::split(payment, amount, ctx);
-        // In a real implementation, this would be transferred to the platform's treasury
-        transfer::public_transfer(payment_amount, @suistream);
+        let platform_wallet = @0xdedef1d507c9be500c5702be259a1dea45ccbbd7ca58c86ab8e31d169cf07a2e;
+        transfer::public_transfer(payment_amount, platform_wallet);
         
         // Transfer subscription to user
         transfer::public_transfer(subscription, sender);

@@ -1,12 +1,57 @@
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Crown, Zap, Star } from 'lucide-react';
+import { useSubscription, SubscriptionTier } from '@/services/subscriptionService';
+import { useWalletContext } from '@/providers/WalletProvider';
+import { toast } from 'sonner';
 
 const SubscriptionPlans = () => {
+  const { isConnected, address, balance } = useWalletContext();
+  const { subscribe, useSubscriptionStatus, tiers } = useSubscription();
+  const { data: subscription } = useSubscriptionStatus();
+  const [isSubscribing, setIsSubscribing] = useState<SubscriptionTier | null>(null);
+
+  const handleSubscribe = async (tier: SubscriptionTier) => {
+    if (!isConnected || !address) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+    
+    if (isSubscribing === tier) return; // Prevent multiple clicks
+
+    const tierInfo = tiers[tier];
+    if (!tierInfo) return;
+
+    // Check if user already has an active subscription
+    if (subscription?.isActive) {
+      toast.info(`You already have an active ${subscription.tier ? tiers[subscription.tier]?.name : ''} subscription`);
+      return;
+    }
+
+    // Check balance
+    if (parseFloat(balance) < tierInfo.price) {
+      toast.error(`Insufficient balance. You need at least ${tierInfo.price} SUI`);
+      return;
+    }
+
+    try {
+      setIsSubscribing(tier);
+      await subscribe(tier);
+      toast.success(`Successfully subscribed to ${tierInfo.name} tier!`);
+    } catch (error) {
+      console.error('Subscription failed:', error);
+      toast.error('Failed to process subscription. Please try again.');
+    } finally {
+      setIsSubscribing(null);
+    }
+  };
+
   const plans = [
     {
+      id: 1,
       name: 'Basic',
-      price: '5 SUI',
+      price: (tiers[1].price / 1000000000).toString(), // Convert from MIST to SUI
       period: '/month',
       icon: Zap,
       color: 'text-neon-cyan',
@@ -21,8 +66,9 @@ const SubscriptionPlans = () => {
       ]
     },
     {
+      id: 2,
       name: 'Premium',
-      price: '10 SUI',
+      price: (tiers[2].price / 1000000000).toString(), // Convert from MIST to SUI
       period: '/month',
       icon: Star,
       color: 'text-neon-pink',
@@ -40,8 +86,9 @@ const SubscriptionPlans = () => {
       ]
     },
     {
+      id: 3,
       name: 'Ultimate',
-      price: '15 SUI',
+      price: (tiers[3].price / 1000000000).toString(), // Convert from MIST to SUI
       period: '/month',
       icon: Crown,
       color: 'text-neon-purple',
@@ -60,10 +107,7 @@ const SubscriptionPlans = () => {
     }
   ];
 
-  const handleSubscribe = (planName: string, price: string) => {
-    console.log(`Subscribing to ${planName} for ${price}`);
-    // Sui blockchain payment logic would go here
-  };
+  // handleSubscribe function is already defined above for handling subscription logic
 
   return (
     <section className="py-20 px-4 relative">
@@ -78,7 +122,7 @@ const SubscriptionPlans = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {plans.map((plan, index) => {
+          {plans.map((plan) => {
             const IconComponent = plan.icon;
             return (
               <Card 
@@ -115,10 +159,21 @@ const SubscriptionPlans = () => {
                   </ul>
 
                   <Button 
-                    onClick={() => handleSubscribe(plan.name, plan.price)}
-                    className={`w-full bg-gradient-to-r ${plan.bgGradient} hover:opacity-80 text-white font-semibold py-3 ${plan.borderColor} border transition-all duration-300 group-hover:animate-neon-pulse`}
+                    onClick={() => handleSubscribe(plan.id as SubscriptionTier)}
+                    disabled={isSubscribing === plan.id}
+                    className={`w-full bg-gradient-to-r ${plan.bgGradient} hover:opacity-80 text-white font-semibold py-3 ${plan.borderColor} border transition-all duration-300 group-hover:animate-neon-pulse flex items-center justify-center gap-2`}
                   >
-                    Subscribe with SUI
+                    {isSubscribing === plan.id ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </>
+                    ) : (
+                      'Subscribe with SUI'
+                    )}
                   </Button>
                 </CardContent>
               </Card>

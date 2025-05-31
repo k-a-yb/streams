@@ -13,7 +13,10 @@ import Collection from "./pages/Collection";
 import Search from "./pages/Search";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
-import { WalletProvider } from "./contexts/WalletContext";
+import { WalletProvider } from "./providers/WalletProvider";
+import { SuiClientProvider } from '@mysten/dapp-kit';
+import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { WalletKitProvider } from '@mysten/wallet-kit';
 
 // Scroll to top on route change
 const ScrollToTop = () => {
@@ -47,26 +50,64 @@ const queryClient = new QueryClient({
   },
 });
 
+// Configure networks for SuiClient
+const networks = {
+  testnet: { url: getFullnodeUrl('testnet') },
+  mainnet: { url: getFullnodeUrl('mainnet') },
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+    <SuiClientProvider networks={networks} defaultNetwork="testnet">
+      <WalletKitProvider>
         <WalletProvider>
-          <ScrollToTop />
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route element={<Layout><Dashboard /></Layout>} path="/dashboard" />
-            <Route element={<Layout><Movies /></Layout>} path="/movies" />
-            <Route element={<Layout><TVShows /></Layout>} path="/tvshows" />
-            <Route element={<Layout><Collection /></Layout>} path="/collection" />
-            <Route element={<Layout><Search /></Layout>} path="/search" />
-            <Route element={<Layout><NotFound /></Layout>} path="*" />
-          </Routes>
+          <TooltipProvider>
+            <BrowserRouter>
+              <ScrollToTop />
+              <Toaster />
+              <Sonner position="top-center" />
+              <Routes>
+                <Route path="/" element={
+                  <Layout>
+                    <Index />
+                  </Layout>
+                } />
+                <Route path="/dashboard" element={
+                  <Layout>
+                    <Dashboard />
+                  </Layout>
+                } />
+                <Route path="/movies" element={
+                  <Layout>
+                    <Movies />
+                  </Layout>
+                } />
+                <Route path="/tv-shows" element={
+                  <Layout>
+                    <TVShows />
+                  </Layout>
+                } />
+                <Route path="/collection" element={
+                  <Layout>
+                    <Collection />
+                  </Layout>
+                } />
+                <Route path="/search" element={
+                  <Layout>
+                    <Search />
+                  </Layout>
+                } />
+                <Route path="*" element={
+                  <Layout>
+                    <NotFound />
+                  </Layout>
+                } />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
         </WalletProvider>
-      </BrowserRouter>
-    </TooltipProvider>
+      </WalletKitProvider>
+    </SuiClientProvider>
   </QueryClientProvider>
 );
 
