@@ -1,12 +1,21 @@
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Check, Crown, Zap, Star } from 'lucide-react';
+import { useSubscribe } from '../lib/suistream';
+import { SUBSCRIPTION_TIERS, SUBSCRIPTION_PRICES } from '../constants';
+import { useToast } from '../hooks/use-toast';
+import { useWallet } from '../contexts/WalletContext';
 
 const SubscriptionPlans = () => {
+  const { subscribe } = useSubscribe();
+  const { toast } = useToast();
+  const { connected } = useWallet();
+
   const plans = [
     {
       name: 'Basic',
-      price: '5 SUI',
+      price: `${SUBSCRIPTION_PRICES[SUBSCRIPTION_TIERS.BASIC] / 1_000_000_000} SUI`,
+      tier: SUBSCRIPTION_TIERS.BASIC,
       period: '/month',
       icon: Zap,
       color: 'text-neon-cyan',
@@ -22,7 +31,8 @@ const SubscriptionPlans = () => {
     },
     {
       name: 'Premium',
-      price: '10 SUI',
+      price: `${SUBSCRIPTION_PRICES[SUBSCRIPTION_TIERS.PREMIUM] / 1_000_000_000} SUI`,
+      tier: SUBSCRIPTION_TIERS.PREMIUM,
       period: '/month',
       icon: Star,
       color: 'text-neon-pink',
@@ -41,7 +51,8 @@ const SubscriptionPlans = () => {
     },
     {
       name: 'Ultimate',
-      price: '15 SUI',
+      price: `${SUBSCRIPTION_PRICES[SUBSCRIPTION_TIERS.ULTIMATE] / 1_000_000_000} SUI`,
+      tier: SUBSCRIPTION_TIERS.ULTIMATE,
       period: '/month',
       icon: Crown,
       color: 'text-neon-purple',
@@ -60,9 +71,30 @@ const SubscriptionPlans = () => {
     }
   ];
 
-  const handleSubscribe = (planName: string, price: string) => {
-    console.log(`Subscribing to ${planName} for ${price}`);
-    // Sui blockchain payment logic would go here
+  const handleSubscribe = async (tier: number) => {
+    if (!connected) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet to subscribe",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const result = await subscribe(tier);
+      toast({
+        title: "Subscription Successful",
+        description: "Your subscription has been activated",
+      });
+    } catch (error) {
+      console.error('Subscription error:', error);
+      toast({
+        title: "Subscription Failed",
+        description: "There was an error processing your subscription",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -78,7 +110,7 @@ const SubscriptionPlans = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {plans.map((plan, index) => {
+          {plans.map((plan) => {
             const IconComponent = plan.icon;
             return (
               <Card 
@@ -115,7 +147,7 @@ const SubscriptionPlans = () => {
                   </ul>
 
                   <Button 
-                    onClick={() => handleSubscribe(plan.name, plan.price)}
+                    onClick={() => handleSubscribe(plan.tier)}
                     className={`w-full bg-gradient-to-r ${plan.bgGradient} hover:opacity-80 text-white font-semibold py-3 ${plan.borderColor} border transition-all duration-300 group-hover:animate-neon-pulse`}
                   >
                     Subscribe with SUI
